@@ -1,0 +1,17 @@
+# Binary hasil compile
+task-api
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output build
+/bin/
+/dist/
+
+# File environment / secret (jangan pernah di-commit)
+.env
