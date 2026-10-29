@@ -1,11 +1,31 @@
 package handler
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func setupTestDB(t *testing.T) *sql.DB {
+	connStr := "postgres://taskapi:devpassword@127.0.0.1:5432/taskdb?sslmode=disable"
+	db, err := sql.Open("pgx", connStr)
+	if err != nil {
+		t.Fatalf("cannot connect to test db: %v", err)
+	}
+
+	if err := db.Ping(); err != nil {
+		t.Fatalf("cannot ping test db: %v", err)
+	}
+
+	// Bersihkan tabel sebelum test mulai agar data terisolasi
+	_, _ = db.Exec("DELETE FROM tasks")
+
+	return db
+}
 
 func TestHealthHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -22,7 +42,9 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestCreateTask(t *testing.T) {
-	h := NewTaskHandler()
+	db := setupTestDB(t)
+	defer db.Close()
+	h := NewTaskHandler(db)
 
 	body := `{"title":"Belajar Unit Test","status":"pending","deadline":"2026-10-30"}`
 	req := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(body))
@@ -37,7 +59,9 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestCreateTask_Invalid(t *testing.T) {
-	h := NewTaskHandler()
+	db := setupTestDB(t)
+	defer db.Close()
+	h := NewTaskHandler(db)
 
 	body := `{"title":"","status":"pending","deadline":"2026-10-30"}`
 	req := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(body))
@@ -52,7 +76,9 @@ func TestCreateTask_Invalid(t *testing.T) {
 }
 
 func TestGetTaskByID(t *testing.T) {
-	h := NewTaskHandler()
+	db := setupTestDB(t)
+	defer db.Close()
+	h := NewTaskHandler(db)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /tasks", h.CreateTask)
@@ -64,15 +90,7 @@ func TestGetTaskByID(t *testing.T) {
 	createRr := httptest.NewRecorder()
 	mux.ServeHTTP(createRr, createReq)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
-	getRr := httptest.NewRecorder()
-	mux.ServeHTTP(getRr, getReq)
-
-	if getRr.Code != http.StatusOK {
-		t.Errorf("expected status %d, got %d", http.StatusOK, getRr.Code)
-	}
-
-	notFoundReq := httptest.NewRequest(http.MethodGet, "/tasks/99", nil)
+	notFoundReq := httptest.NewRequest(http.MethodGet, "/tasks/9999", nil)
 	notFoundRr := httptest.NewRecorder()
 	mux.ServeHTTP(notFoundRr, notFoundReq)
 

@@ -1,24 +1,20 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
-	"sync"
 	"task-api/internal/model"
 )
 
 type TaskHandler struct {
-	mu     sync.Mutex
-	tasks  []model.Task
-	nextID int
+	db *sql.DB
 }
 
-func NewTaskHandler() *TaskHandler {
-	return &TaskHandler{
-		tasks:  []model.Task{},
-		nextID: 1,
-	}
+func NewTaskHandler(db *sql.DB) *TaskHandler {
+	return &TaskHandler{db: db}
 }
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +29,6 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&task); err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request payload"})
 		return
@@ -45,118 +40,160 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mu.Lock()
-	task.ID = h.nextID
-	h.nextID++
-	h.tasks = append(h.tasks, task)
-	h.mu.Unlock()
+	query := `INSERT INTO tasks (title, status, deadline)
+	          VALUES ($1, $2, $3)
+	          RETURNING id`
+
+	err := h.db.QueryRowContext(r.Context(), query, task.Title, task.Status, task.Deadline).Scan(&task.ID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create task"})
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
 }
 
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "Application/json")
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+
+	rows, err := h.db.QueryContext(r.Context(), `SELECT id, title, status, deadline FROM tasks ORDER BY id`)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch tasks"})
+		return
+	}
+	defer rows.Close()
+
+	tasks := []model.Task{}
+	for rows.Next() {
+		var t model.Task
+		if err := rows.Scan(&t.ID, &t.Title, &t.Status, &t.Deadline); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to scan task"})
+			return
+		}
+		tasks = append(tasks, t)
+	}
+	if err := rows.Err(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to read tasks"})
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(h.tasks)
+	json.NewEncoder(w).Encode(tasks)
 }
 
 func (h *TaskHandler) GetTaskByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	id, err := strconv.Atoi(idStr)
+	w.Header().Set("Content-Type", "application/json")
+
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid task ID"})
 		return
 	}
 
-	for _, task := range h.tasks {
-		if task.ID == id {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(task)
-			return
-		}
+	var t model.Task
+	query := `SELECT id, title, status, deadline FROM tasks WHERE id = $1`
+	err = h.db.QueryRowContext(r.Context(), query, id).Scan(&t.ID, &t.Title, &t.Status, &t.Deadline)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch task"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(t)
 }
 
 func (h *TaskHandler) UpdateTaskByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
+	w.Header().Set("Content-Type", "application/json")
+
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid task ID"})
 		return
 	}
-	var updatedTask model.Task
-	w.Header().Set("Content-Type", "application/json")
 
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&updatedTask); err != nil {
-		w.Header().Set("Content-Type", "application/json")
+	var updated model.Task
+	if err := json.NewDecoder(r.Body).Decode(&updated); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request payload"})
 		return
 	}
-	if err := model.ValidateTask(updatedTask); err != nil {
+
+	if err := model.ValidateTask(updated); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
 
-	for i, task := range h.tasks {
-		if task.ID == id {
-			h.tasks[i].Title = updatedTask.Title
-			h.tasks[i].Status = updatedTask.Status
-			h.tasks[i].Deadline = updatedTask.Deadline
-
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(h.tasks[i])
-			return
-		}
+	query := `UPDATE tasks SET title = $1, status = $2, deadline = $3 WHERE id = $4`
+	res, err := h.db.ExecContext(r.Context(), query, updated.Title, updated.Status, updated.Deadline, id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to update task"})
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+	affected, err := res.RowsAffected()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to check update"})
+		return
+	}
+
+	if affected == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+		return
+	}
+
+	updated.ID = id
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updated)
 }
 
 func (h *TaskHandler) DeleteTaskByID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
+	w.Header().Set("Content-Type", "application/json")
+
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid task ID"})
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
 
-	for i, task := range h.tasks {
-		if task.ID == id {
-			h.tasks = append(h.tasks[:i], h.tasks[i+1:]...)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]string{"message": "Task deleted successfully"})
-			return
-		}
+	res, err := h.db.ExecContext(r.Context(), `DELETE FROM tasks WHERE id = $1`, id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete task"})
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
-	json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+	affected, err := res.RowsAffected()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to check delete"})
+		return
+	}
+	if affected == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Task not found"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Task deleted successfully"})
 }

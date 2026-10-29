@@ -3,13 +3,20 @@ package main
 import (
 	"log"
 	"net/http"
+	"task-api/internal/database"
 	"task-api/internal/handler"
 )
 
 func main() {
+	db, err := database.Connect()
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	defer db.Close()
+
 	mux := http.NewServeMux()
 
-	taskHandler := handler.NewTaskHandler()
+	taskHandler := handler.NewTaskHandler(db)
 
 	mux.HandleFunc("GET /health", handler.HealthHandler)
 	mux.HandleFunc("POST /tasks", taskHandler.CreateTask)
