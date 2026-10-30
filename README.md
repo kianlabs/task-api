@@ -18,6 +18,26 @@ REST API sederhana untuk manajemen tugas (Task Management) yang dibangun menggun
 ## Prasyarat
 
 - Go 1.22 atau versi lebih baru.
+- PostgreSQL (atau Docker).
+
+## Konfigurasi Database
+
+Aplikasi menggunakan environment variable `DATABASE_URL` untuk koneksi ke database.
+Format:
+
+```bash
+export DATABASE_URL="postgres://taskapi:devpassword@localhost:5432/taskdb?sslmode=disable"
+```
+
+Jika tidak disetel, aplikasi akan memakai nilai default di atas.
+
+## Migrasi Database
+
+Jalankan script SQL berikut pada database PostgreSQL sebelum menjalankan server:
+
+```bash
+psql "$DATABASE_URL" -f migrations/000001_create_tasks_table.sql
+```
 
 ## Cara Menjalankan
 
@@ -27,30 +47,29 @@ REST API sederhana untuk manajemen tugas (Task Management) yang dibangun menggun
    cd task-api
    ```
 2. Jalankan server:
-   ````bash
-    go run .
-    ```
-   Server akan aktif di port :8081.
-   ````
+   ```bash
+   go run .
+   ```
+   Server akan aktif di port `:8081`.
 
-Contoh Penggunaan (cURL)
+## Contoh Penggunaan (cURL)
 
 1. Membuat Task (POST)
    ```bash
-    curl -X POST http://localhost:8081/tasks \
-        -H "Content-Type: application/json" \
-        -d '{"title":"Belajar Unit Test","status":"pending","deadline":"2026-10-30"}'
+   curl -X POST http://localhost:8081/tasks \
+       -H "Content-Type: application/json" \
+       -d '{"title":"Belajar Unit Test","status":"pending","deadline":"2026-10-30"}'
    ```
    Response (201 Created):
-   ```bash
+   ```json
    {
-   "id": 1,
-   "title": "Belajar Unit Test",
-   "status": "pending",
-   "deadline": "2026-10-30"
+     "id": 1,
+     "title": "Belajar Unit Test",
+     "status": "pending",
+     "deadline": "2026-10-30"
    }
    ```
 2. Mengambil Semua Task (GET)
    ```bash
-    curl http://localhost:8081/tasks
+   curl http://localhost:8081/tasks
    ```
