@@ -8,6 +8,7 @@ import (
 
 type Task struct {
 	ID       int       `json:"id"`
+	UserID   int64     `json:"user_id"`
 	Title    string    `json:"title"`
 	Status   string    `json:"status"`
 	Deadline time.Time `json:"deadline"`
