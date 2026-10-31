@@ -3,14 +3,19 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 	"task-api/internal/auth"
+	"task-api/internal/config"
 	"task-api/internal/database"
 	"task-api/internal/handler"
 )
 
 func main() {
-	db, err := database.Connect()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
+	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
@@ -20,12 +25,8 @@ func main() {
 
 	taskHandler := handler.NewTaskHandler(db)
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "dev-secret-key-change-in-prod"
-	}
-	authHandler := handler.NewAuthHandler(db, jwtSecret)
-	authMiddleware := auth.Middleware(jwtSecret)
+	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
+	authMiddleware := auth.Middleware(cfg.JWTSecret)
 
 	mux.HandleFunc("GET /health", handler.HealthHandler)
 	mux.Handle("POST /tasks", authMiddleware(http.HandlerFunc(taskHandler.CreateTask)))
@@ -36,8 +37,8 @@ func main() {
 	mux.HandleFunc("POST /register", authHandler.Register)
 	mux.HandleFunc("POST /login", authHandler.Login)
 
-	log.Println("Starting server on :8081")
-	if err := http.ListenAndServe(":8081", mux); err != nil {
+	log.Printf("Starting server on :%s", cfg.Port)
+	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 

@@ -3,15 +3,13 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func Connect() (*sql.DB, error) {
-	connString := os.Getenv("DATABASE_URL")
+func Connect(connString string) (*sql.DB, error) {
 	if connString == "" {
-		return nil, fmt.Errorf("DATABASE_URL is not set")
+		return nil, fmt.Errorf("database connection string is empty")
 	}
 
 	db, err := sql.Open("pgx", connString)

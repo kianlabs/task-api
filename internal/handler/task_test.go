@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"strings"
 	"task-api/internal/auth"
 	"task-api/internal/model"
@@ -15,7 +17,24 @@ import (
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
-	connStr := "postgres://taskapi:devpassword@127.0.0.1:5432/taskdb?sslmode=disable"
+	connStr := os.Getenv("TEST_DATABASE_URL")
+	if connStr == "" {
+		t.Skip("TEST_DATABASE_URL belum diset; lewati test integrasi")
+	}
+	parsed, err := url.Parse(connStr)
+	if err != nil {
+		t.Fatalf("URL database tidak valid: %v", err)
+	}
+
+	if parsed.Hostname() != "127.0.0.1" && parsed.Hostname() != "::1" {
+		t.Fatalf("Database harus berada di 127.0.0.1, bukan %s", parsed.Hostname())
+	}
+
+	dbName := strings.TrimPrefix(parsed.Path, "/")
+	if !strings.HasSuffix(dbName, "_test") || dbName == "taskdb" {
+		t.Fatalf("Nama database harus berakhiran _test, bukan %s", dbName)
+	}
+
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		t.Fatalf("cannot connect to test db: %v", err)
@@ -24,11 +43,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 	if err := db.Ping(); err != nil {
 		t.Fatalf("cannot ping test db: %v", err)
 	}
-
-	// Bersihkan tabel sebelum test mulai agar data terisolasi
-	_, _ = db.Exec("DELETE FROM tasks")
-	_, _ = db.Exec("DELETE FROM users")
-
 	return db
 }
 
@@ -86,11 +100,13 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestCreateTask_Invalid(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-	h := NewTaskHandler(db)
+	h := NewTaskHandler(nil)
 
-	_, token := createTestUser(t, db, "testuser@example.com")
+	token, err := auth.GenerateToken(1, testJWTSecret)
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+
 	authMiddleware := auth.Middleware(testJWTSecret)
 	handler := authMiddleware(http.HandlerFunc(h.CreateTask))
 
@@ -138,12 +154,13 @@ func TestGetTaskByID(t *testing.T) {
 }
 
 func TestAuthMiddleware_Reject(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-	h := NewTaskHandler(db)
-
 	authMiddleware := auth.Middleware(testJWTSecret)
-	handler := authMiddleware(http.HandlerFunc(h.GetTask))
+	nextCalled := false
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := authMiddleware(dummyHandler)
 
 	reqNoToken := httptest.NewRequest(http.MethodGet, "/tasks", nil)
 	rrNoToken := httptest.NewRecorder()
@@ -151,6 +168,9 @@ func TestAuthMiddleware_Reject(t *testing.T) {
 
 	if rrNoToken.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for no token, got %d", rrNoToken.Code)
+	}
+	if nextCalled {
+		t.Errorf("expected next handler not to be called when token is missing")
 	}
 
 	reqInvalidToken := httptest.NewRequest(http.MethodGet, "/tasks", nil)
@@ -160,6 +180,9 @@ func TestAuthMiddleware_Reject(t *testing.T) {
 
 	if rrInvalidToken.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for invalid token, got %d", rrInvalidToken.Code)
+	}
+	if nextCalled {
+		t.Errorf("expected next handler not to be called when token is invalid")
 	}
 }
 
@@ -174,11 +197,11 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 	mux.Handle("GET /tasks", authMiddleware(http.HandlerFunc(h.GetTask)))
 	mux.Handle("GET /tasks/{id}", authMiddleware(http.HandlerFunc(h.GetTaskByID)))
 
-	// 1. Buat 2 user: Siti dan Budi
+	// Buat 2 user: Siti dan Budi
 	_, sitiToken := createTestUser(t, db, "siti@example.com")
 	_, budiToken := createTestUser(t, db, "budi@example.com")
 
-	// 2. Siti membuat task
+	// Siti membuat task
 	body := `{"title":"Task Rahasia Siti","status":"pending","deadline":"2026-11-01"}`
 	createReq := httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(body))
 	createReq.Header.Set("Content-Type", "application/json")
@@ -195,7 +218,7 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 		t.Fatalf("failed to decode created task: %v", err)
 	}
 
-	// 3. Budi mencoba mengakses task Siti lewat GET /tasks/{id} -> Harus 404
+	// Budi mencoba mengakses task Siti lewat GET Harus 404
 	budiReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/tasks/%d", createdTask.ID), nil)
 	budiReq.Header.Set("Authorization", "Bearer "+budiToken)
 	budiRr := httptest.NewRecorder()
@@ -205,7 +228,7 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 		t.Errorf("expected 404 when Budi accesses Siti's task, got %d", budiRr.Code)
 	}
 
-	// 4. Budi melihat list task-nya -> Harus kosong []
+	// Budi melihat list task-nya Harus kosong []
 	budiListReq := httptest.NewRequest(http.MethodGet, "/tasks", nil)
 	budiListReq.Header.Set("Authorization", "Bearer "+budiToken)
 	budiListRr := httptest.NewRecorder()
