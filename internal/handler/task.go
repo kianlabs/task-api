@@ -8,36 +8,35 @@ import (
 	"strconv"
 	"task-api/internal/auth"
 	"task-api/internal/model"
+	"task-api/internal/response"
+	"task-api/internal/service"
 )
 
 type TaskHandler struct {
-	db *sql.DB
+	db      *sql.DB
+	service *service.TaskService
 }
 
-func NewTaskHandler(db *sql.DB) *TaskHandler {
-	return &TaskHandler{db: db}
+func NewTaskHandler(db *sql.DB, service *service.TaskService) *TaskHandler {
+	return &TaskHandler{
+		db:      db,
+		service: service,
+	}
 }
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	response.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	var task model.Task
-	w.Header().Set("Content-Type", "application/json")
 
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&task); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request payload"})
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
-
 	if err := model.ValidateTask(task); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		response.Error(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
@@ -47,21 +46,15 @@ func (h *TaskHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
 		return
 	}
+
 	task.UserID = userID
 
-	query := `INSERT INTO tasks (user_id, title, status, deadline)
-	          VALUES ($1, $2, $3, $4)
-	          RETURNING id`
-
-	err := h.db.QueryRowContext(r.Context(), query, task.UserID, task.Title, task.Status, task.Deadline).Scan(&task.ID)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create task"})
+	if err := h.service.CreateTask(r.Context(), &task); err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to create task")
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(task)
+	response.JSON(w, http.StatusCreated, task)
 }
 
 func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {

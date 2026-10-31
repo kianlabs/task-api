@@ -16,4 +16,4 @@ task-api
 # File environment / secret (jangan pernah di-commit)
 .env
 
-.AGENTS.mdAGENTS.md
+AGENTS.md

@@ -11,7 +11,10 @@ import (
 	"strings"
 	"task-api/internal/auth"
 	"task-api/internal/model"
+	"task-api/internal/repository"
+	"task-api/internal/service"
 	"testing"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -72,7 +75,7 @@ func TestHealthHandler(t *testing.T) {
 	}
 
 	expectedBody := `{"status":"ok"}`
-	if rr.Body.String() != expectedBody {
+	if strings.TrimSpace(rr.Body.String()) != expectedBody {
 		t.Errorf("expected body %s, got %s", expectedBody, rr.Body.String())
 	}
 }
@@ -80,9 +83,11 @@ func TestHealthHandler(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
-	h := NewTaskHandler(db)
+	taskRepo := repository.NewTaskRepository(db)
+	taskService := service.NewTaskService(taskRepo)
+	h := NewTaskHandler(db, taskService)
 
-	_, token := createTestUser(t, db, "testuser@example.com")
+	_, token := createTestUser(t, db, fmt.Sprintf("create_%d@example.com", time.Now().UnixNano()))
 	authMiddleware := auth.Middleware(testJWTSecret)
 	handler := authMiddleware(http.HandlerFunc(h.CreateTask))
 
@@ -100,7 +105,8 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestCreateTask_Invalid(t *testing.T) {
-	h := NewTaskHandler(nil)
+	taskService := service.NewTaskService(nil)
+	h := NewTaskHandler(nil, taskService)
 
 	token, err := auth.GenerateToken(1, testJWTSecret)
 	if err != nil {
@@ -126,9 +132,11 @@ func TestCreateTask_Invalid(t *testing.T) {
 func TestGetTaskByID(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
-	h := NewTaskHandler(db)
+	taskRepo := repository.NewTaskRepository(db)
+	taskService := service.NewTaskService(taskRepo)
+	h := NewTaskHandler(db, taskService)
 
-	_, token := createTestUser(t, db, "gettask@example.com")
+	_, token := createTestUser(t, db, fmt.Sprintf("create_%d@example.com", time.Now().UnixNano()))
 	authMiddleware := auth.Middleware(testJWTSecret)
 
 	mux := http.NewServeMux()
@@ -189,7 +197,9 @@ func TestAuthMiddleware_Reject(t *testing.T) {
 func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
-	h := NewTaskHandler(db)
+	taskRepo := repository.NewTaskRepository(db)
+	taskService := service.NewTaskService(taskRepo)
+	h := NewTaskHandler(db, taskService)
 
 	authMiddleware := auth.Middleware(testJWTSecret)
 	mux := http.NewServeMux()
@@ -198,8 +208,8 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 	mux.Handle("GET /tasks/{id}", authMiddleware(http.HandlerFunc(h.GetTaskByID)))
 
 	// Buat 2 user: Siti dan Budi
-	_, sitiToken := createTestUser(t, db, "siti@example.com")
-	_, budiToken := createTestUser(t, db, "budi@example.com")
+	_, sitiToken := createTestUser(t, db, fmt.Sprintf("create_%d@example.com", time.Now().UnixNano()))
+	_, budiToken := createTestUser(t, db, fmt.Sprintf("create_%d@example.com", time.Now().UnixNano()))
 
 	// Siti membuat task
 	body := `{"title":"Task Rahasia Siti","status":"pending","deadline":"2026-11-01"}`

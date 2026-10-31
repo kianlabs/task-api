@@ -7,6 +7,8 @@ import (
 	"task-api/internal/config"
 	"task-api/internal/database"
 	"task-api/internal/handler"
+	"task-api/internal/repository"
+	"task-api/internal/service"
 )
 
 func main() {
@@ -23,7 +25,9 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	taskHandler := handler.NewTaskHandler(db)
+	taskRepo := repository.NewTaskRepository(db)
+	taskService := service.NewTaskService(taskRepo)
+	taskHandler := handler.NewTaskHandler(db, taskService)
 
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	authMiddleware := auth.Middleware(cfg.JWTSecret)
