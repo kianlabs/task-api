@@ -21,6 +21,7 @@ REST API manajemen tugas (Task Management) yang dibangun menggunakan **Go standa
 | GET    | `/tasks/{id}` | Bearer Token | Mengambil detail task milik user |
 | PUT    | `/tasks/{id}` | Bearer Token | Memperbarui task milik user      |
 | DELETE | `/tasks/{id}` | Bearer Token | Menghapus task milik user        |
+| POST   | `/projects`   | Bearer Token | Membuat project baru (atomic owner)|
 
 ## Konfigurasi Environment
 
@@ -45,6 +46,7 @@ export TEST_DATABASE_URL="postgres://taskapi:devpassword@127.0.0.1:5432/taskdb_t
 psql "$DATABASE_URL" -f migrations/000001_create_tasks_table.sql
 psql "$DATABASE_URL" -f migrations/000002_create_users_table.sql
 psql "$DATABASE_URL" -f migrations/000003_add_user_id_to_tasks.sql
+psql "$DATABASE_URL" -f migrations/000004_create_projects_and_members_tables.sql
 ```
 
 ### Cara Menjalankan

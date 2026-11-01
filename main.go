@@ -38,6 +38,9 @@ func main() {
 	taskRepo := repository.NewTaskRepository(db)
 	taskService := service.NewTaskService(taskRepo)
 	taskHandler := handler.NewTaskHandler(db, taskService)
+	projectRepo := repository.NewProjectRepository(db)
+	projectService := service.NewProjectService(projectRepo)
+	projectHandler := handler.NewProjectHandler(projectService)
 
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
 	authMiddleware := auth.Middleware(cfg.JWTSecret)
@@ -48,6 +51,7 @@ func main() {
 	mux.Handle("GET /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.GetTaskByID)))
 	mux.Handle("PUT /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.UpdateTaskByID)))
 	mux.Handle("DELETE /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.DeleteTaskByID)))
+	mux.Handle("POST /projects", authMiddleware(http.HandlerFunc(projectHandler.CreateProject)))
 	mux.HandleFunc("POST /register", authHandler.Register)
 	mux.HandleFunc("POST /login", authHandler.Login)
 
