@@ -52,8 +52,11 @@ func main() {
 	mux.HandleFunc("POST /login", authHandler.Login)
 
 	server := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+		Addr:         ":" + cfg.Port,
+		Handler:      mux,
 	}
 
 	go func() {
