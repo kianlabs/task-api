@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"task-api/internal/auth"
 	"task-api/internal/config"
 	"task-api/internal/database"
 	"task-api/internal/handler"
 	"task-api/internal/repository"
 	"task-api/internal/service"
+	"time"
 )
 
 func main() {
@@ -41,9 +46,30 @@ func main() {
 	mux.HandleFunc("POST /register", authHandler.Register)
 	mux.HandleFunc("POST /login", authHandler.Login)
 
-	log.Printf("Starting server on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	server := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: mux,
 	}
 
+	go func() {
+		log.Printf("Starting server on :%s", cfg.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited cleanly")
 }
