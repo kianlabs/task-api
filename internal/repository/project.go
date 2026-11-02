@@ -72,3 +72,20 @@ func (r *ProjectRepository) ListByUserID(ctx context.Context, userID int64) ([]m
 	return projects, nil
 
 }
+
+func (r *ProjectRepository) GetMemberRole(ctx context.Context, projectID int64, userID int64) (string, error) {
+	query := `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`
+	var role string
+	err := r.db.QueryRowContext(ctx, query, projectID, userID).Scan(&role)
+	if err != nil {
+		return "", err
+	}
+	return role, nil
+}
+
+func (r *ProjectRepository) AddMember(ctx context.Context, member *model.ProjectMember) error {
+	query := `INSERT INTO project_members (project_id, user_id, role)
+	VALUES ($1, $2, $3)
+	RETURNING id, created_at`
+	return r.db.QueryRowContext(ctx, query, member.ProjectID, member.UserID, member.Role).Scan(&member.ID, &member.CreatedAt)
+}

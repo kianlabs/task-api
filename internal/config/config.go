@@ -24,6 +24,9 @@ func Load() (*Config, error) {
 	if jwtSecret == "" {
 		return nil, errors.New("JWT_SECRET is required")
 	}
+	if len(jwtSecret) < 32 {
+		return nil, errors.New("JWT_SECRET must be at least 32 characters long")
+	}
 	return &Config{
 		Port:        port,
 		DatabaseURL: dbURL,

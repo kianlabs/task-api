@@ -21,7 +21,10 @@ REST API manajemen tugas (Task Management) yang dibangun menggunakan **Go standa
 | GET    | `/tasks/{id}` | Bearer Token | Mengambil detail task milik user |
 | PUT    | `/tasks/{id}` | Bearer Token | Memperbarui task milik user      |
 | DELETE | `/tasks/{id}` | Bearer Token | Menghapus task milik user        |
-| POST   | `/projects`   | Bearer Token | Membuat project baru (atomic owner)|
+| POST   | `/projects`              | Bearer Token | Membuat project baru (atomic owner)     |
+| GET    | `/projects`              | Bearer Token | Mengambil daftar project milik/diikuti user|
+| GET    | `/projects/{id}`         | Bearer Token | Mengambil detail project user           |
+| POST   | `/projects/{id}/members` | Bearer Token | Menambahkan anggota ke project (Owner)  |
 
 ## Konfigurasi Environment
 

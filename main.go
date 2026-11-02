@@ -52,6 +52,9 @@ func main() {
 	mux.Handle("PUT /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.UpdateTaskByID)))
 	mux.Handle("DELETE /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.DeleteTaskByID)))
 	mux.Handle("POST /projects", authMiddleware(http.HandlerFunc(projectHandler.CreateProject)))
+	mux.Handle("GET /projects", authMiddleware(http.HandlerFunc(projectHandler.GetProjects)))
+	mux.Handle("GET /projects/{id}", authMiddleware(http.HandlerFunc(projectHandler.GetProjectByID)))
+	mux.Handle("POST /projects/{id}/members", authMiddleware(http.HandlerFunc(projectHandler.AddMember)))
 	mux.HandleFunc("POST /register", authHandler.Register)
 	mux.HandleFunc("POST /login", authHandler.Login)
 
