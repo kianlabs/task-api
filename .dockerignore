@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+
+# CI/CD and orchestration
+.github
+Dockerfile*
+docker-compose*.yml
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Build outputs & temp files
+bin/
+out/
+tmp/
+*.tmp
+*.log
+coverage.out
+
+# Editor and tools
+.vscode/
+.idea/
+.kilo/
+
+# Documentation and project notes
+*.md
+
+# Migrations and scripts (handled separately)
+scripts/
