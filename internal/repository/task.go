@@ -60,9 +60,6 @@ func (r *TaskRepository) GetByID(ctx context.Context, id int64) (*model.Task, er
 	return &t, nil
 }
 
-// List mengembalikan task yang dapat diakses user beserta total baris untuk
-// paginasi. Seluruh nilai masuk lewat placeholder, termasuk nama kolom sort
-// yang dipetakan dari whitelist.
 func (r *TaskRepository) List(ctx context.Context, f model.TaskFilter) ([]model.Task, int, error) {
 	conditions := []string{accessPredicate}
 	args := []any{f.UserID}
@@ -135,7 +132,6 @@ func (r *TaskRepository) List(ctx context.Context, f model.TaskFilter) ([]model.
 	return tasks, total, nil
 }
 
-// taskSortExpression memetakan nama sort publik ke ekspresi SQL tepercaya.
 func taskSortExpression(sort string) string {
 	switch sort {
 	case "deadline":
@@ -169,7 +165,6 @@ func (r *TaskRepository) Update(ctx context.Context, t *model.Task) (bool, error
 	if affected == 0 {
 		return false, nil
 	}
-	// Ambil timestamp hasil update agar response akurat.
 	if err := r.db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM tasks WHERE id = $1`, t.ID).
 		Scan(&t.CreatedAt, &t.UpdatedAt); err != nil {
 		return false, err
@@ -189,7 +184,6 @@ func (r *TaskRepository) Delete(ctx context.Context, id int64) (bool, error) {
 	return affected > 0, nil
 }
 
-// Stats menghitung ringkasan dashboard untuk task yang dapat diakses user.
 func (r *TaskRepository) Stats(ctx context.Context, userID int64) (model.DashboardStats, error) {
 	query := `SELECT
 		COUNT(*),
@@ -233,8 +227,6 @@ func (r *TaskRepository) Stats(ctx context.Context, userID int64) (model.Dashboa
 	return stats, nil
 }
 
-// DueReminders mengelompokkan task yang belum selesai dan sudah jatuh tempo
-// atau jatuh tempo hari ini, berdasarkan user yang bertanggung jawab.
 func (r *TaskRepository) DueReminders(ctx context.Context) ([]model.ReminderCount, error) {
 	query := `SELECT COALESCE(t.assignee_id, t.user_id) AS responsible_id,
 		COUNT(*) FILTER (WHERE t.deadline < CURRENT_DATE),

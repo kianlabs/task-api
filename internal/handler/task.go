@@ -156,7 +156,6 @@ func (h *TaskHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, stats)
 }
 
-// parseTaskFilter membaca query filter dan menolak nilai enum yang tidak dikenal.
 func parseTaskFilter(r *http.Request) (model.TaskFilter, error) {
 	query := r.URL.Query()
 
@@ -194,7 +193,6 @@ func (e filterError) Error() string { return string(e) }
 
 func errInvalidFilter(msg string) error { return filterError(msg) }
 
-// decodeJSON membatasi ukuran body dan menolak field yang tidak dikenal.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	decoder := json.NewDecoder(r.Body)

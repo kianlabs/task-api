@@ -2,7 +2,6 @@ package service
 
 import "errors"
 
-// Sentinel error yang dipetakan handler ke status HTTP.
 var (
 	ErrNotFound   = errors.New("not_found")
 	ErrForbidden  = errors.New("forbidden")
@@ -10,7 +9,6 @@ var (
 	ErrValidation = errors.New("validation")
 )
 
-// AppError membawa pesan siap tampil bersama klasifikasi status.
 type AppError struct {
 	Kind    error
 	Message string

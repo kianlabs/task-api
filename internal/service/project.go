@@ -49,7 +49,6 @@ func (s *ProjectService) ListProjects(ctx context.Context, f model.ProjectFilter
 	return s.repo.ListByUserID(ctx, f)
 }
 
-// UpdateProject: hanya owner atau admin.
 func (s *ProjectService) UpdateProject(ctx context.Context, id, userID int64, updated *model.Project) (*model.Project, error) {
 	if _, err := s.requireRole(ctx, id, userID, model.RoleAdmin); err != nil {
 		return nil, err
@@ -70,7 +69,6 @@ func (s *ProjectService) UpdateProject(ctx context.Context, id, userID int64, up
 	return updated, nil
 }
 
-// DeleteProject: hanya owner. Task dan member ikut terhapus lewat ON DELETE CASCADE.
 func (s *ProjectService) DeleteProject(ctx context.Context, id, userID int64) error {
 	role, err := s.requireRole(ctx, id, userID, model.RoleOwner)
 	if err != nil {
@@ -135,7 +133,6 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, actorID int64
 	return nil
 }
 
-// UpdateMemberRole: hanya owner, dan role owner tidak dapat dipindahkan.
 func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, actorID, targetID int64, role string) error {
 	actorRole, err := s.requireRole(ctx, projectID, actorID, model.RoleOwner)
 	if err != nil {
@@ -166,8 +163,6 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, actorI
 	return nil
 }
 
-// RemoveMember: owner/admin boleh mengeluarkan member; admin tidak boleh
-// mengeluarkan admin lain, dan owner tidak dapat dikeluarkan.
 func (s *ProjectService) RemoveMember(ctx context.Context, projectID, actorID, targetID int64) error {
 	actorRole, err := s.requireRole(ctx, projectID, actorID, model.RoleAdmin)
 	if err != nil {
@@ -210,12 +205,9 @@ func (s *ProjectService) loadProject(ctx context.Context, id int64) (*model.Proj
 	return p, nil
 }
 
-// requireRole memastikan user punya salah satu role yang diminta dan
-// mengembalikan role aktualnya.
 func (s *ProjectService) requireRole(ctx context.Context, projectID, userID int64, minimum string) (string, error) {
 	role, err := s.repo.GetMemberRole(ctx, projectID, userID)
 	if errors.Is(err, sql.ErrNoRows) {
-		// Cek project ada atau tidak agar pesan error tepat.
 		if _, projectErr := s.repo.GetByID(ctx, projectID); errors.Is(projectErr, sql.ErrNoRows) {
 			return "", notFound("project not found")
 		}

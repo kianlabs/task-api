@@ -19,8 +19,6 @@ func NewTaskService(repo *repository.TaskRepository, projectRepo *repository.Pro
 	return &TaskService{repo: repo, projectRepo: projectRepo, userRepo: userRepo}
 }
 
-// CreateTask membuat task milik ownerID. Bila project diisi, owner wajib
-// anggota project tersebut.
 func (s *TaskService) CreateTask(ctx context.Context, ownerID int64, t *model.Task) error {
 	t.UserID = ownerID
 	t.Normalize()
@@ -68,7 +66,6 @@ func (s *TaskService) ListTasks(ctx context.Context, f model.TaskFilter) ([]mode
 	return s.repo.List(ctx, f)
 }
 
-// ListProjectTasks memastikan pemanggil anggota project sebelum membaca task.
 func (s *TaskService) ListProjectTasks(ctx context.Context, projectID, userID int64, f model.TaskFilter) ([]model.Task, int, error) {
 	member, err := s.projectRepo.IsMember(ctx, projectID, userID)
 	if err != nil {
@@ -165,7 +162,6 @@ func (s *TaskService) canRead(ctx context.Context, t *model.Task, userID int64) 
 	return false, nil
 }
 
-// canWrite: pemilik task, atau owner/admin project terkait.
 func (s *TaskService) canWrite(ctx context.Context, t *model.Task, userID int64) (bool, error) {
 	if t.UserID == userID {
 		return true, nil
@@ -183,8 +179,6 @@ func (s *TaskService) canWrite(ctx context.Context, t *model.Task, userID int64)
 	return role == model.RoleOwner || role == model.RoleAdmin, nil
 }
 
-// validateAssignment memastikan project/assignee yang dipilih valid dan
-// konsisten satu sama lain.
 func (s *TaskService) validateAssignment(ctx context.Context, projectID, assigneeID *int64) error {
 	if projectID != nil {
 		if _, err := s.projectRepo.GetByID(ctx, *projectID); errors.Is(err, sql.ErrNoRows) {

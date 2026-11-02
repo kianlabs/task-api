@@ -17,7 +17,6 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// RequestLogger mencatat setiap request dalam format JSON terstruktur.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -35,7 +34,6 @@ func RequestLogger(next http.Handler) http.Handler {
 	})
 }
 
-// Recover mengubah panic menjadi 500 JSON agar server tidak mati.
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -54,7 +52,6 @@ func Recover(next http.Handler) http.Handler {
 	})
 }
 
-// Chain menyusun middleware dari luar ke dalam.
 func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		h = middlewares[i](h)

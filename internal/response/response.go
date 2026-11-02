@@ -17,7 +17,6 @@ func Error(w http.ResponseWriter, status int, message string) {
 	JSON(w, status, map[string]string{"error": message})
 }
 
-// Paginated membungkus list dengan metadata paginasi.
 func Paginated(w http.ResponseWriter, status int, data any, page, limit, total int) {
 	totalPages := 0
 	if limit > 0 {

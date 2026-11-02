@@ -53,8 +53,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// newTestRouter menyusun router yang sama dengan main.go agar test mencakup
-// middleware, routing, dan lapisan service sekaligus.
+// Router yang sama dengan main.go, supaya test mencakup middleware dan routing.
 func newTestRouter(db *sql.DB) http.Handler {
 	userRepo := repository.NewUserRepository(db)
 	taskRepo := repository.NewTaskRepository(db)

@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// Nilai yang diizinkan untuk status dan priority task.
 const (
 	StatusTodo       = "todo"
 	StatusInProgress = "in_progress"
@@ -31,8 +30,6 @@ var (
 	}
 )
 
-// Task adalah satu item pekerjaan yang dimiliki user dan opsional tergabung
-// dalam project serta di-assign ke user lain.
 type Task struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`
@@ -47,7 +44,6 @@ type Task struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// Normalize mengisi nilai default yang aman sebelum validasi.
 func (t *Task) Normalize() {
 	t.Title = strings.TrimSpace(t.Title)
 	t.Description = strings.TrimSpace(t.Description)
@@ -61,8 +57,6 @@ func (t *Task) Normalize() {
 	}
 }
 
-// Validate memeriksa aturan domain task. Error dikembalikan dalam bahasa
-// Inggris huruf kecil agar konsisten dengan konvensi Go.
 func ValidateTask(t Task) error {
 	if strings.TrimSpace(t.Title) == "" {
 		return errors.New("title is required")
@@ -118,7 +112,6 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// TaskFilter menampung seluruh opsi list task dari query string.
 type TaskFilter struct {
 	UserID    int64
 	ProjectID *int64
@@ -131,7 +124,6 @@ type TaskFilter struct {
 	Limit     int
 }
 
-// Normalize menerapkan default dan batas aman untuk paginasi/sort.
 func (f *TaskFilter) Normalize() {
 	if f.Page < 1 {
 		f.Page = 1
@@ -157,13 +149,10 @@ func (f *TaskFilter) Normalize() {
 	f.Priority = strings.TrimSpace(f.Priority)
 }
 
-// Offset menghitung offset SQL dari page dan limit.
 func (f TaskFilter) Offset() int {
 	return (f.Page - 1) * f.Limit
 }
 
-// IsValidStatus dan IsValidPriority dipakai handler untuk menolak filter
-// yang tidak dikenal alih-alih diam-diam mengabaikannya.
 func IsValidStatus(s string) bool {
 	_, ok := validStatuses[s]
 	return ok

@@ -12,9 +12,7 @@ type bucket struct {
 	lastSeen time.Time
 }
 
-// RateLimit membatasi request per alamat IP memakai token bucket sederhana di
-// memori. Cocok untuk satu instance; untuk multi-instance gunakan penyimpanan
-// bersama.
+// Token bucket per IP di memori; hanya cocok untuk satu instance.
 func RateLimit(requestsPerSecond float64, burst int) func(http.Handler) http.Handler {
 	var mu sync.Mutex
 	buckets := make(map[string]*bucket)
@@ -25,7 +23,6 @@ func RateLimit(requestsPerSecond float64, burst int) func(http.Handler) http.Han
 			key := clientIP(r)
 
 			mu.Lock()
-			// Bersihkan bucket idle agar map tidak tumbuh tanpa batas.
 			if time.Since(lastCleanup) > time.Minute {
 				for k, b := range buckets {
 					if time.Since(b.lastSeen) > 10*time.Minute {

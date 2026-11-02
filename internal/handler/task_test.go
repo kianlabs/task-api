@@ -29,7 +29,6 @@ func TestTaskCRUDAndPagination(t *testing.T) {
 
 	_, token := createTestUser(t, db)
 
-	// Create 3 task
 	for i := 1; i <= 3; i++ {
 		rr := doRequest(t, router, requestOptions{
 			method: http.MethodPost,
@@ -47,7 +46,6 @@ func TestTaskCRUDAndPagination(t *testing.T) {
 		}
 	}
 
-	// List dengan pagination limit 2
 	rr := doRequest(t, router, requestOptions{method: http.MethodGet, path: "/tasks?page=1&limit=2", token: token})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("list: expected 200, got %d", rr.Code)
@@ -69,14 +67,12 @@ func TestTaskCRUDAndPagination(t *testing.T) {
 		t.Error("expected page 2 to contain data")
 	}
 
-	// Get by id
 	id := page1.Data[0].ID
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/tasks/%d", id), token: token})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("get: expected 200, got %d", rr.Code)
 	}
 
-	// Update
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPut,
 		path:   fmt.Sprintf("/tasks/%d", id),
@@ -96,7 +92,6 @@ func TestTaskCRUDAndPagination(t *testing.T) {
 		t.Errorf("update not applied: %+v", updated)
 	}
 
-	// Delete
 	rr = doRequest(t, router, requestOptions{method: http.MethodDelete, path: fmt.Sprintf("/tasks/%d", id), token: token})
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("delete: expected 204, got %d", rr.Code)
@@ -132,13 +127,11 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 	}
 	created := decodeBody[model.Task](t, rr)
 
-	// Budi tidak boleh melihat detail
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/tasks/%d", created.ID), token: budiToken})
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for cross-user access, got %d", rr.Code)
 	}
 
-	// Budi tidak boleh update
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPut,
 		path:   fmt.Sprintf("/tasks/%d", created.ID),
@@ -152,7 +145,6 @@ func TestTaskOwnership_CrossUserAccess(t *testing.T) {
 		t.Errorf("expected 403/404 for cross-user update, got %d", rr.Code)
 	}
 
-	// List Budi kosong
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: "/tasks", token: budiToken})
 	list := decodeBody[listEnvelope[model.Task]](t, rr)
 	if len(list.Data) != 0 {
@@ -200,7 +192,6 @@ func TestTaskFilteringAndSearch(t *testing.T) {
 		}
 	}
 
-	// Sort priority desc: urgent harus pertama.
 	rr := doRequest(t, router, requestOptions{method: http.MethodGet, path: "/tasks?sort=priority&order=desc", token: token})
 	sorted := decodeBody[listEnvelope[model.Task]](t, rr)
 	if len(sorted.Data) > 0 && sorted.Data[0].Priority != model.PriorityUrgent {

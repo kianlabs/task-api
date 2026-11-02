@@ -12,7 +12,6 @@ var (
 	ErrReference = errors.New("referenced record does not exist")
 )
 
-// mapPgError menerjemahkan kode error PostgreSQL yang relevan.
 func mapPgError(err error) error {
 	if err == nil {
 		return nil

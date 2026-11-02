@@ -5,8 +5,7 @@ import (
 	"strings"
 )
 
-// CORS mengizinkan origin tertentu saja. Daftar kosong berarti tidak ada
-// header CORS yang dikirim (browser akan memblokir cross-origin).
+// Origin kosong berarti tidak ada header CORS yang dikirim.
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	allowed := make(map[string]struct{}, len(allowedOrigins))
 	for _, origin := range allowedOrigins {

@@ -40,7 +40,6 @@ func main() {
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Wiring dependencies
 	userRepo := repository.NewUserRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
@@ -57,8 +56,6 @@ func main() {
 	authMiddleware := auth.Middleware(cfg.JWTSecret)
 	protected := func(h http.HandlerFunc) http.Handler { return authMiddleware(h) }
 
-	// Background worker (Phase 7). Tanpa Redis: workload kecil dan single
-	// instance, jadi ticker in-process sudah memadai.
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 
@@ -67,7 +64,6 @@ func main() {
 		go reminder.Run(workerCtx)
 	}
 
-	// Rate limit khusus endpoint sensitif (register/login).
 	authLimiter := middleware.RateLimit(1, 5)
 
 	mux := http.NewServeMux()

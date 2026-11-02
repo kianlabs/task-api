@@ -76,13 +76,11 @@ func TestProjectRBACAndMembers(t *testing.T) {
 	}
 	project := decodeBody[model.Project](t, rr)
 
-	// Non-member tidak boleh melihat
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/projects/%d", project.ID), token: bobToken})
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for non-member, got %d", rr.Code)
 	}
 
-	// Non-member tidak boleh menambah member
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: bobToken,
 		body: map[string]any{"user_id": charlieID, "role": "member"},
@@ -91,7 +89,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("expected 403/404 for non-member add, got %d", rr.Code)
 	}
 
-	// Owner menambahkan Bob sebagai member
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: aliceToken,
 		body: map[string]any{"user_id": bobID, "role": "member"},
@@ -104,7 +101,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("unexpected member: %+v", member)
 	}
 
-	// Duplikat member → 409
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: aliceToken,
 		body: map[string]any{"user_id": bobID, "role": "member"},
@@ -113,13 +109,11 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("expected 409 for duplicate member, got %d", rr.Code)
 	}
 
-	// Member sekarang bisa melihat project
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/projects/%d", project.ID), token: bobToken})
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200 for member, got %d", rr.Code)
 	}
 
-	// Member tidak boleh menambah member lain
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: bobToken,
 		body: map[string]any{"user_id": charlieID, "role": "member"},
@@ -128,7 +122,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("expected 403 when member adds member, got %d", rr.Code)
 	}
 
-	// Owner promosikan Bob menjadi admin
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPatch, path: fmt.Sprintf("/projects/%d/members/%d", project.ID, bobID), token: aliceToken,
 		body: map[string]any{"role": "admin"},
@@ -137,7 +130,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Fatalf("promote member: expected 200, got %d (%s)", rr.Code, rr.Body.String())
 	}
 
-	// Admin tidak boleh menambah admin lain
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: bobToken,
 		body: map[string]any{"user_id": charlieID, "role": "admin"},
@@ -146,7 +138,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("expected 403 when admin adds admin, got %d", rr.Code)
 	}
 
-	// Admin boleh menambah member biasa
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: bobToken,
 		body: map[string]any{"user_id": charlieID, "role": "member"},
@@ -155,7 +146,6 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Fatalf("admin add member: expected 201, got %d (%s)", rr.Code, rr.Body.String())
 	}
 
-	// Daftar member berisi 3 orang
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/projects/%d/members", project.ID), token: charlieToken})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("list members: expected 200, got %d", rr.Code)
@@ -167,13 +157,11 @@ func TestProjectRBACAndMembers(t *testing.T) {
 		t.Errorf("expected 3 members, got %d", len(members.Data))
 	}
 
-	// Member tidak boleh menghapus project
 	rr = doRequest(t, router, requestOptions{method: http.MethodDelete, path: fmt.Sprintf("/projects/%d", project.ID), token: charlieToken})
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("expected 403 when member deletes project, got %d", rr.Code)
 	}
 
-	// Admin mengeluarkan member
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodDelete, path: fmt.Sprintf("/projects/%d/members", project.ID), token: bobToken,
 		body: map[string]any{"user_id": charlieID},
@@ -198,7 +186,6 @@ func TestProjectTasksFlow(t *testing.T) {
 	})
 	project := decodeBody[model.Project](t, rr)
 
-	// Tambahkan Bob sebagai member agar bisa di-assign
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/members", project.ID), token: aliceToken,
 		body: map[string]any{"user_id": bobID, "role": "member"},
@@ -207,7 +194,6 @@ func TestProjectTasksFlow(t *testing.T) {
 		t.Fatalf("add member: %d %s", rr.Code, rr.Body.String())
 	}
 
-	// Owner membuat task di project, assign ke Bob
 	rr = doRequest(t, router, requestOptions{
 		method: http.MethodPost, path: fmt.Sprintf("/projects/%d/tasks", project.ID), token: aliceToken,
 		body: map[string]any{
@@ -223,19 +209,16 @@ func TestProjectTasksFlow(t *testing.T) {
 		t.Errorf("expected project_id %d, got %v", project.ID, task.ProjectID)
 	}
 
-	// Bob (assignee + member) bisa melihat task
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/tasks/%d", task.ID), token: bobToken})
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected assignee to read task, got %d", rr.Code)
 	}
 
-	// Outsider tidak bisa
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/tasks/%d", task.ID), token: outsiderToken})
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for outsider, got %d", rr.Code)
 	}
 
-	// List task project oleh member
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/projects/%d/tasks", project.ID), token: bobToken})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("list project tasks: expected 200, got %d", rr.Code)
@@ -245,13 +228,11 @@ func TestProjectTasksFlow(t *testing.T) {
 		t.Errorf("expected 1 project task, got %d", len(list.Data))
 	}
 
-	// Outsider tidak boleh list
 	rr = doRequest(t, router, requestOptions{method: http.MethodGet, path: fmt.Sprintf("/projects/%d/tasks", project.ID), token: outsiderToken})
 	if rr.Code != http.StatusForbidden && rr.Code != http.StatusNotFound {
 		t.Errorf("expected 403/404 for outsider list, got %d", rr.Code)
 	}
 
-	// Assign ke non-member ditolak
 	outsiderID := int64(0)
 	rrOut := doRequest(t, router, requestOptions{method: http.MethodGet, path: "/me", token: outsiderToken})
 	outsider := decodeBody[model.User](t, rrOut)
@@ -268,7 +249,6 @@ func TestProjectTasksFlow(t *testing.T) {
 		t.Errorf("expected 400 when assigning non-member, got %d", rr.Code)
 	}
 
-	// Hapus project → task ikut terhapus (cascade)
 	rr = doRequest(t, router, requestOptions{method: http.MethodDelete, path: fmt.Sprintf("/projects/%d", project.ID), token: aliceToken})
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("delete project: expected 204, got %d", rr.Code)

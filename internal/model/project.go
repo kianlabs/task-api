@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// Role pada project.
 const (
 	RoleOwner  = "owner"
 	RoleAdmin  = "admin"
@@ -22,8 +21,6 @@ type Project struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// ProjectMember adalah keanggotaan user pada project, disertai email agar
-// frontend tidak perlu melakukan lookup tambahan.
 type ProjectMember struct {
 	ProjectID int64     `json:"project_id"`
 	UserID    int64     `json:"user_id"`

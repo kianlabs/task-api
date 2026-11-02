@@ -24,7 +24,6 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-// normalizeEmail menyeragamkan email agar uniqueness di database konsisten.
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

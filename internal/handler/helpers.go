@@ -10,7 +10,6 @@ import (
 	"task-api/internal/service"
 )
 
-// writeServiceError menerjemahkan error domain menjadi status HTTP yang tepat.
 func writeServiceError(w http.ResponseWriter, err error) {
 	var appErr *service.AppError
 	if errors.As(err, &appErr) {
@@ -33,7 +32,6 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	response.Error(w, http.StatusInternalServerError, "internal server error")
 }
 
-// parseIntQuery mengambil query param integer dengan batas aman.
 func parseIntQuery(r *http.Request, key string, fallback, min, max int) int {
 	raw := r.URL.Query().Get(key)
 	if raw == "" {

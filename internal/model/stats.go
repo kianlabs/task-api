@@ -1,6 +1,5 @@
 package model
 
-// Pagination adalah metadata yang menyertai setiap response list.
 type Pagination struct {
 	Page       int `json:"page"`
 	Limit      int `json:"limit"`
@@ -8,7 +7,6 @@ type Pagination struct {
 	TotalPages int `json:"total_pages"`
 }
 
-// NewPagination menghitung total halaman dari total baris.
 func NewPagination(page, limit, total int) Pagination {
 	totalPages := 0
 	if limit > 0 {
@@ -22,7 +20,6 @@ func NewPagination(page, limit, total int) Pagination {
 	}
 }
 
-// DashboardStats merangkum pekerjaan user untuk halaman dashboard.
 type DashboardStats struct {
 	TotalTasks int            `json:"total_tasks"`
 	ByStatus   map[string]int `json:"by_status"`

@@ -176,7 +176,6 @@ func (r *ProjectRepository) AddMember(ctx context.Context, member *model.Project
 		Scan(&member.CreatedAt); err != nil {
 		return mapPgError(err)
 	}
-	// Lengkapi email untuk response.
 	return r.db.QueryRowContext(ctx, `SELECT email FROM users WHERE id = $1`, member.UserID).
 		Scan(&member.Email)
 }

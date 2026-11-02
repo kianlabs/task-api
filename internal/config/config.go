@@ -67,7 +67,6 @@ func Load() (*Config, error) {
 	}, nil
 }
 
-// parseOrigins memecah daftar origin dipisah koma, mengabaikan entri kosong.
 func parseOrigins(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
 		return nil
