@@ -35,12 +35,12 @@ Body: `{"email":"a@b.com","password":"min6char"}`
 - 200: `{"id":1,"email":"a@b.com","created_at":"..."}`
 
 ### PATCH /me
-Body: `{"email":"baru@b.com"}` (semua field opsional)
-- 200: user object, 409 email dipakai
+Body: `{"email":"baru@b.com"}` (`email` wajib, tidak boleh kosong)
+- 200: user object, 400 validasi, 409 email dipakai
 
 ### PATCH /me/password
 Body: `{"current_password":"...","new_password":"min6char"}`
-- 204, 400 salah, 401 current password salah
+- 204, 400 validasi, 403 current password salah
 
 ## Task
 
@@ -70,7 +70,7 @@ Body: `{"title":"...","description":"...","status":"todo","priority":"medium","d
 
 ### GET /tasks
 Query: `page`, `limit`, `status`, `priority`, `project_id`, `q` (search title/description), `sort` (`id`|`deadline`|`priority`|`created_at`), `order` (`asc`|`desc`)
-- 200 envelope. Hanya task milik user (owner) atau yang di-assign ke user.
+- 200 envelope. Task yang tampil: milik user (owner), yang di-assign ke user, atau task dari project tempat user menjadi anggota.
 
 ### GET /tasks/{id}
 - 200 task, 404 jika bukan hak akses
@@ -126,9 +126,11 @@ Body: `{"user_id":2,"role":"member"}` — hanya `owner`/`admin`
 Body: `{"role":"admin"}` — hanya `owner`; role `owner` tidak boleh diubah
 - 200, 403
 
-### DELETE /projects/{id}/members/{userID}
+### DELETE /projects/{id}/members
 Request body: `{"user_id": 3}` — hanya `owner`/`admin`; `owner` tidak bisa dihapus
 - 204, 403
+
+Catatan: `userID` hanya dipakai di path `PATCH`. Penghapusan member memakai body, bukan path.
 
 ## Project Tasks
 
