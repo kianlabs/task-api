@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"task-api/internal/response"
 )
 
 type contextKey string
@@ -16,20 +18,24 @@ func Middleware(secret string) func(http.Handler) http.Handler {
 			authHeader := r.Header.Get("Authorization")
 
 			if !strings.HasPrefix(authHeader, "Bearer ") {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
-			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+			if tokenString == "" {
+				response.Error(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
 			userID, err := ValidateToken(tokenString, secret)
 			if err != nil {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

@@ -7,13 +7,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
 	"task-api/internal/auth"
 	"task-api/internal/config"
 	"task-api/internal/database"
 	"task-api/internal/handler"
+	"task-api/internal/middleware"
 	"task-api/internal/repository"
 	"task-api/internal/service"
-	"time"
+	"task-api/internal/worker"
 )
 
 func main() {
@@ -33,60 +36,107 @@ func main() {
 	}
 	defer db.Close()
 
-	mux := http.NewServeMux()
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
+	// Wiring dependencies
+	userRepo := repository.NewUserRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
-	taskService := service.NewTaskService(taskRepo)
-	taskHandler := handler.NewTaskHandler(db, taskService)
 	projectRepo := repository.NewProjectRepository(db)
-	projectService := service.NewProjectService(projectRepo)
-	projectHandler := handler.NewProjectHandler(projectService)
+
+	userService := service.NewUserService(userRepo)
+	taskService := service.NewTaskService(taskRepo, projectRepo, userRepo)
+	projectService := service.NewProjectService(projectRepo, userRepo)
 
 	authHandler := handler.NewAuthHandler(db, cfg.JWTSecret)
+	userHandler := handler.NewUserHandler(userService)
+	taskHandler := handler.NewTaskHandler(taskService)
+	projectHandler := handler.NewProjectHandler(projectService, taskService)
+
 	authMiddleware := auth.Middleware(cfg.JWTSecret)
+	protected := func(h http.HandlerFunc) http.Handler { return authMiddleware(h) }
 
-	mux.HandleFunc("GET /health", handler.HealthHandler)
-	mux.Handle("POST /tasks", authMiddleware(http.HandlerFunc(taskHandler.CreateTask)))
-	mux.Handle("GET /tasks", authMiddleware(http.HandlerFunc(taskHandler.GetTask)))
-	mux.Handle("GET /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.GetTaskByID)))
-	mux.Handle("PUT /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.UpdateTaskByID)))
-	mux.Handle("DELETE /tasks/{id}", authMiddleware(http.HandlerFunc(taskHandler.DeleteTaskByID)))
-	mux.Handle("POST /projects", authMiddleware(http.HandlerFunc(projectHandler.CreateProject)))
-	mux.Handle("GET /projects", authMiddleware(http.HandlerFunc(projectHandler.GetProjects)))
-	mux.Handle("GET /projects/{id}", authMiddleware(http.HandlerFunc(projectHandler.GetProjectByID)))
-	mux.Handle("POST /projects/{id}/members", authMiddleware(http.HandlerFunc(projectHandler.AddMember)))
-	mux.HandleFunc("POST /register", authHandler.Register)
-	mux.HandleFunc("POST /login", authHandler.Login)
+	// Background worker (Phase 7). Tanpa Redis: workload kecil dan single
+	// instance, jadi ticker in-process sudah memadai.
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
 
-	server := &http.Server{
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  15 * time.Second,
-		Addr:         ":" + cfg.Port,
-		Handler:      mux,
+	if cfg.ReminderEnabled {
+		reminder := worker.NewReminderWorker(taskRepo, cfg.ReminderInterval, slog.Default())
+		go reminder.Run(workerCtx)
 	}
 
+	// Rate limit khusus endpoint sensitif (register/login).
+	authLimiter := middleware.RateLimit(1, 5)
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /health", handler.HealthHandler)
+	mux.Handle("POST /register", authLimiter(http.HandlerFunc(authHandler.Register)))
+	mux.Handle("POST /login", authLimiter(http.HandlerFunc(authHandler.Login)))
+
+	mux.Handle("GET /me", protected(userHandler.GetProfile))
+	mux.Handle("PATCH /me", protected(userHandler.UpdateProfile))
+	mux.Handle("PATCH /me/password", protected(userHandler.ChangePassword))
+
+	mux.Handle("POST /tasks", protected(taskHandler.CreateTask))
+	mux.Handle("GET /tasks", protected(taskHandler.ListTasks))
+	mux.Handle("GET /tasks/{id}", protected(taskHandler.GetTaskByID))
+	mux.Handle("PUT /tasks/{id}", protected(taskHandler.UpdateTaskByID))
+	mux.Handle("DELETE /tasks/{id}", protected(taskHandler.DeleteTaskByID))
+
+	mux.Handle("POST /projects", protected(projectHandler.CreateProject))
+	mux.Handle("GET /projects", protected(projectHandler.ListProjects))
+	mux.Handle("GET /projects/{id}", protected(projectHandler.GetProjectByID))
+	mux.Handle("PUT /projects/{id}", protected(projectHandler.UpdateProjectByID))
+	mux.Handle("DELETE /projects/{id}", protected(projectHandler.DeleteProjectByID))
+	mux.Handle("GET /projects/{id}/members", protected(projectHandler.ListMembers))
+	mux.Handle("POST /projects/{id}/members", protected(projectHandler.AddMember))
+	mux.Handle("PATCH /projects/{id}/members/{userID}", protected(projectHandler.UpdateMemberRole))
+	mux.Handle("DELETE /projects/{id}/members", protected(projectHandler.RemoveMember))
+	mux.Handle("GET /projects/{id}/tasks", protected(projectHandler.ListProjectTasks))
+	mux.Handle("POST /projects/{id}/tasks", protected(projectHandler.CreateProjectTask))
+
+	mux.Handle("GET /dashboard", protected(taskHandler.Dashboard))
+
+	server := &http.Server{
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 3 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           middleware.Chain(mux, middleware.Recover, middleware.RequestLogger, middleware.CORS(cfg.AllowedOrigins)),
+	}
+
+	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("starting server", "port", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			serverErr <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
 
-	slog.Info("Shutting down server gracefully")
+	select {
+	case err := <-serverErr:
+		slog.Error("server error", "error", err)
+		os.Exit(1)
+	case <-quit:
+		slog.Info("shutting down server gracefully")
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	stopWorker()
+
 	if err := server.Shutdown(ctx); err != nil {
-		slog.Error("server error", "error", err)
+		slog.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}
 
-	slog.Info("Server exited cleanly")
+	slog.Info("server exited cleanly")
 }

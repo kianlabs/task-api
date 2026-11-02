@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"net/mail"
+	"strings"
 	"time"
 )
 
@@ -22,22 +24,40 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-func (req *LoginRequest) Validate() error {
-	if req.Email == "" {
-		return errors.New("Email is required")
+// normalizeEmail menyeragamkan email agar uniqueness di database konsisten.
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func validateCredentials(email, password string) error {
+	if email == "" {
+		return errors.New("email is required")
 	}
-	if len(req.Password) < 6 {
-		return errors.New("Password must be at least 6 characters")
+	if _, err := mail.ParseAddress(email); err != nil {
+		return errors.New("email is not valid")
+	}
+	if len(password) < 6 {
+		return errors.New("password must be at least 6 characters")
+	}
+	if len(password) > 72 {
+		// Batas bcrypt: byte di atas 72 diabaikan diam-diam.
+		return errors.New("password must be at most 72 characters")
 	}
 	return nil
 }
 
+func (req *LoginRequest) Normalize() {
+	req.Email = normalizeEmail(req.Email)
+}
+
+func (req *LoginRequest) Validate() error {
+	return validateCredentials(req.Email, req.Password)
+}
+
+func (req *RegisterRequest) Normalize() {
+	req.Email = normalizeEmail(req.Email)
+}
+
 func (req *RegisterRequest) Validate() error {
-	if req.Email == "" {
-		return errors.New("Email is required")
-	}
-	if len(req.Password) < 6 {
-		return errors.New("Password must be at least 6 characters")
-	}
-	return nil
+	return validateCredentials(req.Email, req.Password)
 }

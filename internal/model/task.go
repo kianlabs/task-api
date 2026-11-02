@@ -2,32 +2,88 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
+// Nilai yang diizinkan untuk status dan priority task.
+const (
+	StatusTodo       = "todo"
+	StatusInProgress = "in_progress"
+	StatusDone       = "done"
+
+	PriorityLow    = "low"
+	PriorityMedium = "medium"
+	PriorityHigh   = "high"
+	PriorityUrgent = "urgent"
+)
+
+const dateFormat = "2006-01-02"
+
+var (
+	validStatuses = map[string]struct{}{
+		StatusTodo: {}, StatusInProgress: {}, StatusDone: {},
+	}
+	validPriorities = map[string]struct{}{
+		PriorityLow: {}, PriorityMedium: {}, PriorityHigh: {}, PriorityUrgent: {},
+	}
+)
+
+// Task adalah satu item pekerjaan yang dimiliki user dan opsional tergabung
+// dalam project serta di-assign ke user lain.
 type Task struct {
-	ID       int       `json:"id"`
-	UserID   int64     `json:"user_id"`
-	Title    string    `json:"title"`
-	Status   string    `json:"status"`
-	Deadline time.Time `json:"deadline"`
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	ProjectID   *int64    `json:"project_id"`
+	AssigneeID  *int64    `json:"assignee_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	Priority    string    `json:"priority"`
+	Deadline    time.Time `json:"deadline"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func ValidateTask(t Task) error {
-	if t.Title == "" {
-		return fmt.Errorf("Title is required")
-	}
+// Normalize mengisi nilai default yang aman sebelum validasi.
+func (t *Task) Normalize() {
+	t.Title = strings.TrimSpace(t.Title)
+	t.Description = strings.TrimSpace(t.Description)
+	t.Status = strings.TrimSpace(t.Status)
+	t.Priority = strings.TrimSpace(t.Priority)
 	if t.Status == "" {
-		return fmt.Errorf("Status is required")
+		t.Status = StatusTodo
+	}
+	if t.Priority == "" {
+		t.Priority = PriorityMedium
+	}
+}
+
+// Validate memeriksa aturan domain task. Error dikembalikan dalam bahasa
+// Inggris huruf kecil agar konsisten dengan konvensi Go.
+func ValidateTask(t Task) error {
+	if strings.TrimSpace(t.Title) == "" {
+		return errors.New("title is required")
+	}
+	if len(t.Title) > 200 {
+		return errors.New("title must be at most 200 characters")
+	}
+	if len(t.Description) > 5000 {
+		return errors.New("description must be at most 5000 characters")
+	}
+	if _, ok := validStatuses[t.Status]; !ok {
+		return fmt.Errorf("status must be one of: todo, in_progress, done")
+	}
+	if _, ok := validPriorities[t.Priority]; !ok {
+		return fmt.Errorf("priority must be one of: low, medium, high, urgent")
 	}
 	if t.Deadline.IsZero() {
-		return fmt.Errorf("Deadline is required")
+		return errors.New("deadline is required")
 	}
 	return nil
 }
-
-const dateFormat = "2006-01-02"
 
 func (t Task) MarshalJSON() ([]byte, error) {
 	type Alias Task
@@ -60,4 +116,60 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	}
 	t.Deadline = parsed
 	return nil
+}
+
+// TaskFilter menampung seluruh opsi list task dari query string.
+type TaskFilter struct {
+	UserID    int64
+	ProjectID *int64
+	Status    string
+	Priority  string
+	Search    string
+	Sort      string
+	Order     string
+	Page      int
+	Limit     int
+}
+
+// Normalize menerapkan default dan batas aman untuk paginasi/sort.
+func (f *TaskFilter) Normalize() {
+	if f.Page < 1 {
+		f.Page = 1
+	}
+	if f.Limit <= 0 {
+		f.Limit = 20
+	}
+	if f.Limit > 100 {
+		f.Limit = 100
+	}
+	switch f.Sort {
+	case "deadline", "priority", "created_at", "id":
+	default:
+		f.Sort = "id"
+	}
+	if strings.EqualFold(f.Order, "desc") {
+		f.Order = "desc"
+	} else {
+		f.Order = "asc"
+	}
+	f.Search = strings.TrimSpace(f.Search)
+	f.Status = strings.TrimSpace(f.Status)
+	f.Priority = strings.TrimSpace(f.Priority)
+}
+
+// Offset menghitung offset SQL dari page dan limit.
+func (f TaskFilter) Offset() int {
+	return (f.Page - 1) * f.Limit
+}
+
+// IsValidStatus dan IsValidPriority dipakai handler untuk menolak filter
+// yang tidak dikenal alih-alih diam-diam mengabaikannya.
+func IsValidStatus(s string) bool {
+	_, ok := validStatuses[s]
+	return ok
+}
+
+func IsValidPriority(p string) bool {
+	_, ok := validPriorities[p]
+	return ok
 }
