@@ -1,6 +1,8 @@
 # Task Manager API
 
-REST API manajemen task dan project, dibangun dengan **Go standard library** (`net/http`) tanpa framework web, PostgreSQL, dan JWT. Proyek portfolio untuk menunjukkan alur backend yang lengkap: autentikasi, otorisasi berlapis, transaksi, paginasi/filter, observability, worker background, dan deployment yang reprodusibel.
+REST API manajemen task dan project, dibangun dengan **Go standard library** (`net/http`) tanpa framework web, PostgreSQL, dan JWT. Proyek pembelajaran backend untuk menunjukkan alur backend yang lengkap: autentikasi, otorisasi berlapis, transaksi, paginasi/filter, observability, worker background, dan deployment yang reprodusibel.
+
+Tidak ada demo live — ini API only. Jalankan secara lokal atau via Docker Compose (di bawah), lalu coba endpoint dengan `curl`.
 
 ## Masalah yang diselesaikan
 
@@ -79,9 +81,9 @@ erDiagram
     }
     projects {
         bigserial id PK
+        bigint owner_id FK
         text name
         text description
-        bigint owner_id FK
         timestamptz created_at
         timestamptz updated_at
     }
@@ -118,8 +120,8 @@ erDiagram
 ### 2. Environment
 
 ```bash
-export DATABASE_URL="postgres://taskapi:devpassword@127.0.0.1:5432/taskdb?sslmode=disable"
-export JWT_SECRET="minimal-32-karakter-jangan-di-commit"
+export DATABASE_URL=postgres://user:password@localhost:5432/taskdb
+export JWT_SECRET=minimal-32-karakter-rahasia
 ```
 
 Variabel opsional:
@@ -160,10 +162,10 @@ docker compose up --build
 go test ./...
 
 # Integration test (butuh PostgreSQL terpisah)
-TEST_DATABASE_URL="postgres://taskapi:devpassword@127.0.0.1:5432/taskdb_test?sslmode=disable" go test ./...
+TEST_DATABASE_URL=postgres://user:password@localhost:5432/taskdb_test go test ./... -tags=integration
 
 # Race detector
-TEST_DATABASE_URL="..." go test -race ./...
+TEST_DATABASE_URL=postgres://user:password@localhost:5432/taskdb_test go test ./... -race -tags=integration
 
 # Kualitas kode
 go vet ./...
@@ -205,7 +207,7 @@ Spesifikasi lengkap: [`openapi.yaml`](./openapi.yaml) dan ringkasan kontrak di [
 Contoh:
 
 ```bash
-TOKEN=$(curl -s -X POST localhost:8081/login \
+TOKEN=$(curl -s localhost:8081/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"me@example.com","password":"secret123"}' | jq -r .token)
 
@@ -251,9 +253,17 @@ Ditinjau manual saat Phase 9:
 - [x] Log tidak memuat password, token, atau body request.
 - [ ] HTTPS termination belum ditangani aplikasi — diserahkan ke reverse proxy saat deployment.
 
+## Yang Saya Pelajari
+
+- **Standard library Go sudah cukup untuk REST API lengkap.** Routing `METHOD /path/{id}` di `net/http` modern, middleware sendiri, dan tanpa framework — dependency yang sedikit berarti permukaan serangan dan permukaan kebingungan yang sedikit juga.
+- **Otorisasi adalah aturan bisnis, bukan urusan HTTP.** Memeriksa akses di service layer (bukan di handler) berarti satu tempat untuk semua aturan — dan satu tempat untuk mengujinya lewat HTTP.
+- **404 bisa lebih aman daripada 403.** Mengembalikan 404 untuk resource yang tidak boleh dilihat mencegah kebocoran keberadaan data — dengan konsekuensi debugging harus lewat log, bukan response.
+- **Tanpa ORM bukan berarti tanpa disiplin.** SQL berparameter, whitelist kolom sorting, dan migrasi manual yang berurutan memberi kontrol penuh — tapi menuntut konsistensi yang ORM biasanya sediakan gratis.
+- **Test harus punya pengaman.** Guard integration test (hanya database `_test` di loopback) memastikan test tidak pernah bisa menghapus database development — keamanan test suite sama pentingnya dengan keamanan aplikasi.
+
 ## Roadmap
 
-Phase 0–5 selesai di backend, Phase 7 (worker) dan Phase 8 (Docker/CI) disiapkan, Phase 9 (dokumentasi) mencakup README ini. **Phase 6 (frontend React) dikerjakan terpisah oleh pemilik proyek.**
+Phase 0–5 selesai di backend, Phase 7 (worker) dan Phase 8 (Docker/CI) disiapkan, Phase 9 (dokumentasi) mencakup README ini. **Phase 6 (frontend React) direncanakan terpisah.**
 
 ## Lisensi
 
