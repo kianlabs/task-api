@@ -1,5 +1,11 @@
 # Task Manager API
 
+[![CI](https://github.com/kianlabs/task-api/actions/workflows/ci.yml/badge.svg)](https://github.com/kianlabs/task-api/actions/workflows/ci.yml)
+![Go version](https://img.shields.io/github/go-mod/go-version/kianlabs/task-api?logo=go&logoColor=white&color=00ADD8)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0.3-6BA539?logo=openapiinitiative&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
 REST API manajemen task dan project, dibangun dengan **Go standard library** (`net/http`) tanpa framework web, PostgreSQL, dan JWT. Proyek pembelajaran backend untuk menunjukkan alur backend yang lengkap: autentikasi, otorisasi berlapis, transaksi, paginasi/filter, observability, worker background, dan deployment yang reprodusibel.
 
 Tidak ada demo live — ini API only. Jalankan secara lokal atau via Docker Compose (di bawah), lalu coba endpoint dengan `curl`.
@@ -57,8 +63,14 @@ openapi.yaml                spesifikasi OpenAPI 3.0.3
 
 Alur request:
 
-```
-HTTP → middleware (recover → log) → auth middleware → handler → service → repository → PostgreSQL
+```mermaid
+flowchart LR
+    Client([HTTP client]) --> Recover[recover] --> Log[request log] --> Auth[auth middleware<br/>JWT HS256]
+    Auth --> Handler[handler<br/>decode + response]
+    Handler --> Service[service<br/>business rules + RBAC]
+    Service --> Repo[repository<br/>parameterized SQL]
+    Repo --> DB[(PostgreSQL 18)]
+    Worker[[reminder worker]] -.->|periodic scan| Repo
 ```
 
 Aturan penting: SQL hanya ada di `repository`, otorisasi hanya di `service`, dan handler tidak pernah menyentuh database langsung.
